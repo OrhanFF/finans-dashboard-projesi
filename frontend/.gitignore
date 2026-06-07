@@ -1,0 +1,24 @@
+# Ortam değişkenleri — kesinlikle pushlanmamalı
+.env
+.env.*
+
+# Bağımlılıklar
+node_modules/
+__pycache__/
+*.pyc
+
+# ML model dosyası (büyük olabilir, ayrıca yönet)
+*.pkl
+
+# Eğitim CSV'leri (büyük dosyalar)
+*.csv
+
+# Log dosyaları
+*.log
+
+# OS dosyaları
+.DS_Store
+Thumbs.db
+
+# Playwright hata ekran görüntüleri
+*.png
