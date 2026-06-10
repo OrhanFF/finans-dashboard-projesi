@@ -106,15 +106,49 @@ def load_data(csv_path: str) -> pd.DataFrame:
 # ADIM 2 — WALK-FORWARD CV
 # ─────────────────────────────────────────────
 
-def walk_forward_cv(pipeline, X, y, n_splits=5):
-    tscv   = TimeSeriesSplit(n_splits=n_splits)
+def walk_forward_cv(pipeline, df, n_splits=5):
+    """
+    Hisse bazında zaman-ileri CV: her hissenin kendi zaman ekseninde
+    TimeSeriesSplit uygulanır, fold'lar tüm hisselerden birleştirilir.
+    Böylece bir fold'da bazı hisselerin tamamen eğitimde/testte kalması
+    (sembol bazlı sızıntı) önlenir.
+    """
     scores = []
-    for fold, (tr, te) in enumerate(tscv.split(X)):
-        pipeline.fit(X[tr], y[tr])
-        acc = accuracy_score(y[te], pipeline.predict(X[te]))
+    symbol_splits = {}
+    for symbol, sym_df in df.groupby('symbol'):
+        idx = sym_df.index.to_numpy()
+        tscv = TimeSeriesSplit(n_splits=n_splits)
+        symbol_splits[symbol] = [(idx[tr], idx[te]) for tr, te in tscv.split(idx)]
+
+    X_all = df[FEATURES].fillna(0.0).values
+    y_all = df['Target'].values
+    idx_to_pos = {idx_val: pos for pos, idx_val in enumerate(df.index)}
+
+    for fold in range(n_splits):
+        train_idx = np.concatenate([symbol_splits[s][fold][0] for s in symbol_splits])
+        test_idx  = np.concatenate([symbol_splits[s][fold][1] for s in symbol_splits])
+        train_pos = [idx_to_pos[i] for i in train_idx]
+        test_pos  = [idx_to_pos[i] for i in test_idx]
+
+        pipeline.fit(X_all[train_pos], y_all[train_pos])
+        acc = accuracy_score(y_all[test_pos], pipeline.predict(X_all[test_pos]))
         scores.append(acc)
         print(f"      Fold {fold+1}: {acc:.3f}")
     return {'mean': np.mean(scores), 'std': np.std(scores), 'scores': scores}
+
+
+def per_symbol_split(df, train_frac=0.8):
+    """
+    Her hissenin kendi zaman ekseninde ilk %80'i eğitim, son %20'si test
+    olacak şekilde böler. Böylece her hisse hem eğitimde hem testte yer
+    alır ve test verisi gerçekten "gelecek" günleri temsil eder.
+    """
+    train_mask = pd.Series(False, index=df.index)
+    for symbol, sym_df in df.groupby('symbol'):
+        n = len(sym_df)
+        split = int(n * train_frac)
+        train_mask.loc[sym_df.index[:split]] = True
+    return train_mask.values
 
 
 # ─────────────────────────────────────────────
@@ -122,15 +156,16 @@ def walk_forward_cv(pipeline, X, y, n_splits=5):
 # ─────────────────────────────────────────────
 
 def train(df: pd.DataFrame):
-    print("\n🤖 2. Modeller eğitiliyor (Zamansal Split %80/%20)...")
+    print("\n🤖 2. Modeller eğitiliyor (Hisse Bazında Zamansal Split %80/%20)...")
     
     X_raw = df[FEATURES].fillna(0.0).values
     y     = df['Target'].values
 
-    # Zamansal (Kronolojik) Split (%80 Eğitim, %20 Test)
-    split = int(len(X_raw) * 0.8)
-    X_tr, X_te = X_raw[:split], X_raw[split:]
-    y_tr, y_te = y[:split],     y[split:]
+    # Hisse bazında zamansal (kronolojik) split (%80 Eğitim, %20 Test)
+    # Her hissenin ilk %80'i eğitime, son %20'si teste gider.
+    train_mask = per_symbol_split(df, train_frac=0.8)
+    X_tr, X_te = X_raw[train_mask], X_raw[~train_mask]
+    y_tr, y_te = y[train_mask],     y[~train_mask]
     print(f"   Eğitim: {len(X_tr)} | Test: {len(X_te)}")
 
     classifiers = {
@@ -164,7 +199,7 @@ def train(df: pd.DataFrame):
         # Pipeline: Önce veriyi standartlaştır (0 ortalama, 1 varyans), sonra modele ver
         pipe = Pipeline([('scaler', StandardScaler()), ('model', clf)])
 
-        cv = walk_forward_cv(pipe, X_raw, y, n_splits=5)
+        cv = walk_forward_cv(pipe, df, n_splits=5)
         print(f"   CV: %{cv['mean']*100:.2f} ± %{cv['std']*100:.2f}")
 
         pipe.fit(X_tr, y_tr)

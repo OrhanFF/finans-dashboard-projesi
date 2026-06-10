@@ -143,7 +143,7 @@ function PredictionPage({ searchTerm }) {
             />
           </div>
           <p className="confidence-hint">
-            %50 = rastgele tahmin · %60+ = anlamlı sinyal · Model: {data.model_name || 'Gradient Boosting'}
+            %50 = rastgele tahmin · %60+ = anlamlı sinyal · Model: {data.model_name || 'XGBoost'}
           </p>
         </div>
       </article>
@@ -280,10 +280,10 @@ function PredictionPage({ searchTerm }) {
         <p className="prediction-label">Model Bilgisi</p>
         <div className="model-info-grid">
           {[
-            ['Algoritma',       data.model_name || 'Gradient Boosting'],
+            ['Algoritma',       data.model_name || 'XGBoost'],
             ['Eğitim Seti',     '10 hisse · 750 gün'],
-            ['Test Accuracy',   '%68.00'],
-            ['CV Accuracy',     '%66.00'],
+            ['Test Accuracy',   '%51.0'],
+            ['CV Accuracy',     '%50.2'],
             ['Özellik Sayısı',  '18 indikatör'],
             ['Model Versiyonu', 'v3.0'],
           ].map(([label, value]) => (
