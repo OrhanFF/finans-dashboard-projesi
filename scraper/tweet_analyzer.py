@@ -15,7 +15,7 @@ import argparse
 import os
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from transformers import pipeline
 
 load_dotenv()
@@ -24,10 +24,10 @@ load_dotenv()
 # AYARLAR
 # ─────────────────────────────────────────────
 
-MONGO_URI        = os.getenv("MONGO_URI", "mongodb://localhost:27017/finans")
-DEFAULT_BATCH    = 64
+MONGO_URI          = os.getenv("MONGO_URI", "mongodb://localhost:27017/finans")
+DEFAULT_BATCH      = 64
 TOXICITY_THRESHOLD = 0.60
-TOXIC_LABELS     = {"toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"}
+TOXIC_LABELS       = {"toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"}
 
 
 # ─────────────────────────────────────────────
@@ -45,10 +45,6 @@ def get_collection():
 # ─────────────────────────────────────────────
 
 def run_toxicity(analyzer, texts: list) -> list:
-    """
-    Batch toxicity analizi.
-    Her metin için {"is_toxic": bool, "toxicity_score": float} döner.
-    """
     results = []
     try:
         outputs = analyzer(texts)
@@ -64,21 +60,17 @@ def run_toxicity(analyzer, texts: list) -> list:
                 "toxicity_score": round(max_score, 4)
             })
     except Exception as e:
-        print(f"   ⚠️ Toxicity hatası: {e}")
+        print(f"\n   ⚠️ Toxicity hatası: {e}")
         results = [{"is_toxic": False, "toxicity_score": 0.0}] * len(texts)
     return results
 
 
 def run_sentiment(analyzer, texts: list) -> list:
-    """
-    Batch FinBERT sentiment analizi.
-    Her metin için {"sentiment": str, "sentiment_score": float} döner.
-    """
     results = []
     try:
         outputs = analyzer(texts)
         for output in outputs:
-            label = output["label"]   # positive / negative / neutral
+            label = output["label"]
             score = output["score"]
 
             if label == "positive":
@@ -93,7 +85,7 @@ def run_sentiment(analyzer, texts: list) -> list:
                 "sentiment_score": sent_score
             })
     except Exception as e:
-        print(f"   ⚠️ Sentiment hatası: {e}")
+        print(f"\n   ⚠️ Sentiment hatası: {e}")
         results = [{"sentiment": "neutral", "sentiment_score": 0.0}] * len(texts)
     return results
 
@@ -106,7 +98,6 @@ def main(symbol: str | None, batch_size: int):
     print("📦 MongoDB bağlantısı kuruluyor...")
     collection = get_collection()
 
-    # Analiz edilmemiş tweetleri çek
     query = {"is_analyzed": False}
     if symbol:
         query["symbol"] = symbol.upper()
@@ -120,8 +111,12 @@ def main(symbol: str | None, batch_size: int):
     if symbol:
         print(f"   Hisse filtresi: {symbol.upper()}")
 
-    # Modelleri yükle
+    # ── Donanım seç ──────────────────────────────────────────────
     print("\n🧠 Modeller yükleniyor...")
+    import torch
+    device_id = 0 if torch.cuda.is_available() else -1
+    device_label = "GPU (CUDA)" if device_id == 0 else "CPU"
+    print(f"   [!] Kullanılan donanım: {device_label}")
 
     print("   [1/2] toxic-bert yükleniyor...")
     toxicity_analyzer = pipeline(
@@ -129,7 +124,8 @@ def main(symbol: str | None, batch_size: int):
         model="unitary/toxic-bert",
         truncation=True,
         max_length=512,
-        top_k=None
+        top_k=None,
+        device=device_id
     )
     print("   ✅ toxic-bert hazır.")
 
@@ -138,29 +134,35 @@ def main(symbol: str | None, batch_size: int):
         "sentiment-analysis",
         model="ProsusAI/finbert",
         truncation=True,
-        max_length=512
+        max_length=512,
+        device=device_id
     )
     print("   ✅ FinBERT hazır.\n")
 
-    # Batch halinde analiz et
-    processed = 0
-    cursor = collection.find(query).batch_size(batch_size)
+    # ── Batch analiz ─────────────────────────────────────────────
+    try:
+        from tqdm import tqdm
+        pbar = tqdm(total=total, desc="Analiz", unit="tweet")
+        use_tqdm = True
+    except ImportError:
+        use_tqdm = False
+        print("   (tqdm kurulu değil, sade ilerleme gösterilecek)")
+
+    processed   = 0
+    cursor      = collection.find(query).batch_size(batch_size)
     batch_docs  = []
     batch_texts = []
 
     def flush_batch():
         nonlocal processed
-
         if not batch_docs:
             return
 
-        texts = batch_texts[:]
+        tox_results  = run_toxicity(toxicity_analyzer,  batch_texts[:])
+        sent_results = run_sentiment(sentiment_analyzer, batch_texts[:])
 
-        tox_results  = run_toxicity(toxicity_analyzer, texts)
-        sent_results = run_sentiment(sentiment_analyzer, texts)
-
-        for doc, tox, sent in zip(batch_docs, tox_results, sent_results):
-            collection.update_one(
+        operations = [
+            UpdateOne(
                 {"_id": doc["_id"]},
                 {"$set": {
                     "is_toxic":        tox["is_toxic"],
@@ -171,10 +173,17 @@ def main(symbol: str | None, batch_size: int):
                     "analyzed_at":     datetime.now(timezone.utc),
                 }}
             )
-            processed += 1
+            for doc, tox, sent in zip(batch_docs, tox_results, sent_results)
+        ]
 
-        pct = processed / total * 100
-        print(f"   → {processed}/{total} (%{pct:.1f}) tamamlandı...", end="\r")
+        if operations:
+            collection.bulk_write(operations)
+            processed += len(operations)
+            if use_tqdm:
+                pbar.update(len(operations))
+            else:
+                pct = processed / total * 100
+                print(f"   → {processed}/{total} (%{pct:.1f}) tamamlandı...", end="\r")
 
         batch_docs.clear()
         batch_texts.clear()
@@ -182,33 +191,33 @@ def main(symbol: str | None, batch_size: int):
     for doc in cursor:
         batch_docs.append(doc)
         batch_texts.append(doc.get("tweet", ""))
-
         if len(batch_docs) >= batch_size:
             flush_batch()
 
-    # Kalan tweetleri işle
     flush_batch()
+
+    if use_tqdm:
+        pbar.close()
+
+    # ── Özet ─────────────────────────────────────────────────────
+    sym_filter = {"symbol": symbol.upper()} if symbol else {}
+
+    toxic_count = collection.count_documents({**sym_filter, "is_toxic": True})
+    pos_count   = collection.count_documents({**sym_filter, "sentiment": "positive"})
+    neg_count   = collection.count_documents({**sym_filter, "sentiment": "negative"})
+    neu_count   = collection.count_documents({**sym_filter, "sentiment": "neutral"})
 
     print(f"\n\n{'='*50}")
     print(f"🏆 ANALİZ TAMAMLANDI!")
     print(f"   İşlenen tweet : {processed}")
-
-    # Özet istatistik
-    toxic_count = collection.count_documents(
-        {**({"symbol": symbol.upper()} if symbol else {}), "is_toxic": True}
-    )
-    pos_count = collection.count_documents(
-        {**({"symbol": symbol.upper()} if symbol else {}), "sentiment": "positive"}
-    )
-    neg_count = collection.count_documents(
-        {**({"symbol": symbol.upper()} if symbol else {}), "sentiment": "negative"}
-    )
-
     print(f"\n   📊 Özet İstatistik:")
-    print(f"   Toksik tweet  : {toxic_count}")
-    print(f"   Pozitif       : {pos_count}")
-    print(f"   Negatif       : {neg_count}")
+    if processed > 0:
+        print(f"   Toksik tweet  : {toxic_count}  (%{toxic_count/processed*100:.1f})")
+        print(f"   Pozitif       : {pos_count}  (%{pos_count/processed*100:.1f})")
+        print(f"   Negatif       : {neg_count}  (%{neg_count/processed*100:.1f})")
+        print(f"   Nötr          : {neu_count}  (%{neu_count/processed*100:.1f})")
     print(f"{'='*50}")
+    print(f"\n💡 Sonraki adım: python tweet_feature_builder.py --merge")
 
 
 if __name__ == "__main__":

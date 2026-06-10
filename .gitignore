@@ -5,10 +5,8 @@ __pycache__/
 venv/
 env/
 .venv/
-*.pkl
-*.model
-*.csv
 model_report*.txt
+raw_partner_headlines.csv
 
 # Node.js / Backend & Frontend
 node_modules/
@@ -16,8 +14,7 @@ dist/
 build/
 .npm/
 
-# Environment Variables (GİZLİ BİLGİLER - ASLA GITHUB'A GİTMEMELİ)
-.env
+# Environment Variables (SİLİNDİ - ARTIK GITHUB'A GİDECEK)
 .env.local
 .env.*.local
 

@@ -1,8 +1,7 @@
 import asyncio
 import sys
 
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# removed WindowsSelectorEventLoopPolicy because Playwright needs ProactorEventLoop to launch Chromium.
 
 import os
 from playwright.async_api import (
@@ -57,7 +56,7 @@ async def lifespan(app: FastAPI):
         raise ValueError("X_AUTH_TOKEN .env dosyasında bulunamadı. Lütfen Adım 1-2-3'ü kontrol edin.")
 
     # ── toxic-bert bir kere yükleniyor ──────────────────────────
-    print("🧠 toxic-bert modeli yükleniyor... (ilk seferde ~400MB indirir)")
+    print("toxic-bert modeli yukleniyor... (ilk seferde ~400MB indirir)")
     try:
         toxicity_analyzer = hf_pipeline(
             "text-classification",
@@ -67,9 +66,9 @@ async def lifespan(app: FastAPI):
             top_k=None          # Tüm etiket skorlarını döndür
         )
         app.state.toxicity_analyzer = toxicity_analyzer
-        print("✅ toxic-bert hazır.")
+        print("toxic-bert hazir.")
     except Exception as e:
-        print(f"⚠️ toxic-bert yüklenemedi: {e}")
+        print(f"Uyari: toxic-bert yuklenemedi: {e}")
         app.state.toxicity_analyzer = None
     # ────────────────────────────────────────────────────────────
 
@@ -104,8 +103,8 @@ async def lifespan(app: FastAPI):
         page_for_test = await context.new_page()
         await page_for_test.route("**/*", block_trackers)
 
-        await page_for_test.goto("https://x.com/home", wait_until="networkidle", timeout=60000)
-        await page_for_test.wait_for_selector('a[aria-label="Ara ve keşfet"]', timeout=15000)
+        await page_for_test.goto("https://x.com/home", wait_until="domcontentloaded", timeout=60000)
+        await page_for_test.wait_for_selector('input[data-testid="SearchBox_Search_Input"]', timeout=15000)
 
         print("Cookie ile giriş başarılı! Sunucu hazır.")
         await page_for_test.close()
@@ -182,7 +181,7 @@ def analyze_toxicity(analyzer, text: str) -> dict:
         }
 
     except Exception as e:
-        print(f"⚠️ Toxicity analizi hatası: {e}")
+        print(f"Uyari Toxicity analizi hatasi: {e}")
         return {"is_toxic": False, "toxicity_score": 0.0}
 
 
@@ -208,23 +207,9 @@ async def get_tweets_from_x(
         page = await context.new_page()
         await page.route("**/*", block_trackers)
 
-        print(f"'{hashtag}' için ana sayfaya gidiliyor...")
-        await page.goto("https://x.com/home", wait_until="networkidle", timeout=60000)
-        await page.wait_for_timeout(2000)
-
-        # Arama çubuğuna tıkla
-        print("Arama çubuğu aranıyor...")
-        search_box = page.locator('a[aria-label="Ara ve keşfet"]')
-        await search_box.wait_for(timeout=10000)
-        await search_box.click()
-        await page.wait_for_timeout(1000)
-
-        # Arama kutusuna yaz
-        search_input = page.locator('input[data-testid="SearchBox_Search_Input"]')
-        await search_input.wait_for(timeout=10000)
-        await search_input.fill(f"#{hashtag}")
-        await page.wait_for_timeout(500)
-        await search_input.press("Enter")
+        print(f"'{hashtag}' için arama sayfasına gidiliyor...")
+        search_url = f"https://x.com/search?q=%23{hashtag}&src=typed_query&f=live"
+        await page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
 
         # Sayfanın yüklenmesini bekle
         await page.wait_for_timeout(3000)
@@ -266,7 +251,7 @@ async def get_tweets_from_x(
 
                     # ── Toxicity Analizi ──────────────────────
                     toxicity = analyze_toxicity(toxicity_analyzer, text)
-                    label = "🔴 TOKSİK" if toxicity["is_toxic"] else "🟢 TEMİZ"
+                    label = "TOKSIK" if toxicity["is_toxic"] else "TEMIZ"
                     print(f"   [{label}] @{user}: {text[:60]}...")
                     # ─────────────────────────────────────────
 

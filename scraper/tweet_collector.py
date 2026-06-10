@@ -40,9 +40,10 @@ MONGO_URI  = os.getenv("MONGO_URI", "mongodb://localhost:27017/finans")
 AUTH_TOKEN = os.getenv("X_AUTH_TOKEN", "")
 
 TWEETS_PER_MONTH  = 150   # Ay basina hedef tweet
-MONTHS_BACK       = 12    # Kac ay geriye gidecegiz (1 yila cikarildi)
+MONTHS_BACK       = 36    # Kac ay geriye gidecegiz (3 yila cikarildi!)
 SCROLL_PAUSE      = 2500
-MAX_EMPTY_SCROLLS = 6
+MAX_EMPTY_SCROLLS = 8
+
 
 # ─────────────────────────────────────────────
 # MONGODB
@@ -161,40 +162,47 @@ async def collect_month(context, symbol: str, since: str, until: str,
     search_url = f"https://x.com/search?q={query}&f=top&src=typed_query"
 
     try:
-        page = await context.new_page()
-        await page.route("**/*", block_trackers)
+        # Sayfayi yuklemek icin 3 deneme hakki (X'in anlik hatalarini asmak icin)
+        for attempt in range(3):
+            if page:
+                await page.close()
+                page = None
+                
+            page = await context.new_page()
+            await page.route("**/*", block_trackers)
 
-        await page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-        await asyncio.sleep(4)
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
+            await asyncio.sleep(4)
 
-        if "login" in page.url or "i/flow" in page.url:
-            print(f"   [{symbol}] HATA: Oturum kapanmis!")
-            return []
+            if "login" in page.url or "i/flow" in page.url:
+                print(f"   [{symbol}] HATA: Oturum kapanmis!")
+                if page: await page.close()
+                return []
 
-        # Yeniden Dene butonu varsa bas
-        retry_btn = page.locator('span:has-text("Yeniden dene")')
-        try:
-            if await retry_btn.count() > 0:
-                print(f"   [{symbol}][{month_key}] 'Yeniden dene' bulundu, tiklaniyor...")
-                await retry_btn.first.click(timeout=3000)
-                await asyncio.sleep(4)
-        except:
-            pass
+            # Yeniden Dene butonu varsa bas
+            retry_btn = page.locator('span:has-text("Yeniden dene")')
+            try:
+                if await retry_btn.count() > 0:
+                    print(f"   [{symbol}][{month_key}] 'Yeniden dene' bulundu, tiklaniyor...")
+                    await retry_btn.first.click(timeout=3000)
+                    await asyncio.sleep(4)
+            except:
+                pass
 
+            article_locator = page.locator('article[data-testid="tweet"]')
+            try:
+                await article_locator.first.wait_for(timeout=10000)
+                break # Basariyla tweetler yuklendi, deneme dongusunden cik!
+            except Exception:
+                print(f"   [{symbol}][{month_key}] Deneme {attempt+1}/3: Tweet bulunamadi, sayfa yenileniyor...")
+                await asyncio.sleep(3)
+                if attempt == 2:
+                    if page: await page.close()
+                    return tweets # 3 denemede de olmadi, bos listeyi don
+
+        # Tweetler yuklendi, simdi asagi kaydirarak toplayalim
         while len(tweets) < limit:
             article_locator = page.locator('article[data-testid="tweet"]')
-
-            try:
-                await article_locator.first.wait_for(timeout=12000)
-            except Exception:
-                # Son bir kez sayfayi yenileyip deneyelim
-                await page.reload(wait_until="domcontentloaded")
-                await asyncio.sleep(5)
-                try:
-                    await article_locator.first.wait_for(timeout=10000)
-                except:
-                    break  # Gercekten tweet yok
-
             count = await article_locator.count()
             new_this_scroll = 0
 
@@ -354,7 +362,7 @@ if __name__ == "__main__":
     parser.add_argument("--clean",   action="store_true", help="Onceden MongoDB'yi temizle")
     args = parser.parse_args()
 
-    symbols = [args.symbol.upper()] if args.symbol else WATCHLIST
+    symbols = [s.strip().upper() for s in args.symbol.split(',')] if args.symbol else WATCHLIST
     months  = args.months
 
     print("Tweet Toplayici Basliyor")

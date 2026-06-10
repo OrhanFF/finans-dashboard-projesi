@@ -245,6 +245,36 @@ function PredictionPage({ searchTerm }) {
 
       </div>
 
+      {/* ── X (TWITTER) ANALİZİ BAŞLIĞI ── */}
+      <p className="prediction-section-title">X (Twitter) Analizi</p>
+
+      <div className="prediction-metric-grid">
+        {/* Tweet Hacmi */}
+        <article className="prediction-metric-card">
+          <p className="metric-label-sm">Tweet Hacmi</p>
+          <p className="metric-value-lg" style={{ color: '#8b5cf6' }}>{data.tweet_volume ? data.tweet_volume.toFixed(0) : '0'}</p>
+          <p className="metric-hint" style={{ marginTop: '6px' }}>Son 24 saatteki X etkileşimi</p>
+        </article>
+
+        {/* Tweet Sentiment */}
+        <article className="prediction-metric-card">
+          <p className="metric-label-sm">Tweet Sentiment</p>
+          <p className="metric-value-lg" style={{ color: (data.tweet_sentiment_avg || 0) > 0 ? '#10b981' : (data.tweet_sentiment_avg || 0) < 0 ? '#ef4444' : '#8b949e' }}>
+            {(data.tweet_sentiment_avg || 0) > 0 ? 'Pozitif' : (data.tweet_sentiment_avg || 0) < 0 ? 'Negatif' : 'Nötr'}
+          </p>
+          <p className="metric-hint" style={{ marginTop: '6px' }}>Skor: {(data.tweet_sentiment_avg || 0).toFixed(3)}</p>
+        </article>
+
+        {/* Toksik Oranı */}
+        <article className="prediction-metric-card">
+          <p className="metric-label-sm">Toksik Tweet Oranı</p>
+          <p className="metric-value-lg" style={{ color: (data.tweet_toxic_ratio || 0) > 0.1 ? '#ef4444' : '#10b981' }}>
+            %{((data.tweet_toxic_ratio || 0) * 100).toFixed(1)}
+          </p>
+          <p className="metric-hint" style={{ marginTop: '6px' }}>Manipülasyon ve FUD riski</p>
+        </article>
+      </div>
+
       {/* ── MODEL BİLGİSİ ── */}
       <article className="model-info-card">
         <p className="prediction-label">Model Bilgisi</p>
@@ -254,8 +284,8 @@ function PredictionPage({ searchTerm }) {
             ['Eğitim Seti',     '10 hisse · 750 gün'],
             ['Test Accuracy',   '%68.00'],
             ['CV Accuracy',     '%66.00'],
-            ['Özellik Sayısı',  '10 indikatör'],
-            ['Model Versiyonu', 'v2.0'],
+            ['Özellik Sayısı',  '17 indikatör'],
+            ['Model Versiyonu', 'v3.0'],
           ].map(([label, value]) => (
             <div key={label} className="model-info-item">
               <p className="model-info-item-label">{label}</p>
@@ -281,7 +311,7 @@ function PredictionPage({ searchTerm }) {
 
         {/* Yenilikler */}
         <div className="model-v2-badge-row">
-          {['Sentiment Decay', 'RSI-14', 'MA20 Ratio', 'Momentum 5d', 'Gradient Boosting'].map(tag => (
+          {['X Sentiment', 'Toxic BERT', 'Tweet Volume', 'Sentiment Decay', 'RSI-14', 'Momentum'].map(tag => (
             <span key={tag} className="model-v2-badge">{tag}</span>
           ))}
         </div>

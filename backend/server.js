@@ -60,7 +60,7 @@ app.get('/api/search', async (req, res) => {
     const response = await axios.get(`${SCRAPER_API_URL}/scrape`, { params: { ticker: q } });
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: 'Scraper servisine ulaşılamadı' });
+    res.json([]); // Scraper kapalıysa hata fırlatma, frontend'i çökertmemek için boş tweet listesi dön
   }
 });
 

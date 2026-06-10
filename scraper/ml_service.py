@@ -34,7 +34,7 @@ load_dotenv()
 # MODEL YÜKLEMESİ
 # ─────────────────────────────────────────────
 
-MODEL_PATH   = "model_v2c.pkl"         # v2c: 9460 satir + EWM RSI + VIX_log + TimeSeriesSplit
+MODEL_PATH   = "model_v3.pkl"         # v3: 9460 satir + Teknik + Finnhub + Twitter Sentiment
 FINNHUB_KEY  = os.getenv("FINNHUB_API_KEY", "")
 FINNHUB_BASE = "https://finnhub.io/api/v1"
 
@@ -312,6 +312,11 @@ class PredictionResponse(BaseModel):
     rsi_14:           float
     ma20_ratio:       float
     momentum_5d:      float
+    tweet_volume:     float
+    tweet_sentiment_avg: float
+    tweet_toxic_ratio: float
+    tweet_positive_ratio: float
+    tweet_negative_ratio: float
     is_supported:     bool
     model_name:       str
     message:          str
@@ -320,6 +325,39 @@ class PredictionResponse(BaseModel):
 # ─────────────────────────────────────────────
 # ENDPOINT'LER
 # ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# TWEET FEATURE ÖNBELLEĞİ
+# ─────────────────────────────────────────────
+_tweet_cache = {}
+TWEET_CSV = "Tweet_Features.csv"
+
+def load_tweet_features():
+    global _tweet_cache
+    if os.path.exists(TWEET_CSV):
+        df = pd.read_csv(TWEET_CSV)
+        # Her hisse için en güncel (son) veriyi al
+        for symbol in df['symbol'].unique():
+            sym_df = df[df['symbol'] == symbol].sort_values('Date')
+            last_30 = sym_df.tail(30)
+            _tweet_cache[symbol] = {
+                'Tweet_Volume':         float(last_30['Tweet_Volume'].mean()),
+                'Tweet_Volume_7d_Avg':  float(last_30['Tweet_Volume_7d_Avg'].mean()),
+                'Tweet_Sentiment_Avg':  float(last_30['Tweet_Sentiment_Avg'].mean()),
+                'Tweet_Sentiment_3d':   float(last_30['Tweet_Sentiment_3d'].mean()),
+                'Tweet_Toxic_Ratio':    float(last_30['Tweet_Toxic_Ratio'].mean()),
+                'Tweet_Positive_Ratio': float(last_30['Tweet_Positive_Ratio'].mean()),
+                'Tweet_Negative_Ratio': float(last_30['Tweet_Negative_Ratio'].mean()),
+            }
+        print(f"{len(_tweet_cache)} hisse icin guncel Tweet verileri bellege alindi.")
+    else:
+        print("Uyari: Tweet_Features.csv bulunamadi, varsayilan 0.0 kullanilacak.")
+
+load_tweet_features()
+
+
+# No startup_event needed here.
+
 
 @app.get("/health")
 def health_check():
@@ -370,7 +408,20 @@ def predict(symbol: str):
         'News_count_7d':   sent['News_count_7d'],
     }
 
-    X = np.array([[feature_map[f] for f in FEATURES]])
+    # 3.5. Tweet feature'lar (CSV'den çekilen en güncel değerler)
+    tw_feats = _tweet_cache.get(symbol, {
+        'Tweet_Volume': 0.0,
+        'Tweet_Volume_7d_Avg': 0.0,
+        'Tweet_Sentiment_Avg': 0.0,
+        'Tweet_Sentiment_3d': 0.0,
+        'Tweet_Toxic_Ratio': 0.0,
+        'Tweet_Positive_Ratio': 0.0,
+        'Tweet_Negative_Ratio': 0.0,
+    })
+    feature_map.update(tw_feats)
+
+    X_raw = np.array([[feature_map[f] for f in FEATURES]], dtype=float)
+    X = np.nan_to_num(X_raw, nan=0.0)
 
     # 4. Tahmin
     pred_int   = int(MODEL.predict(X)[0])
@@ -389,13 +440,18 @@ def predict(symbol: str):
         prediction_int=pred_int,
         confidence=round(confidence, 4),
         sentiment_score=round(sent['score'], 4),
-        daily_return=round(tech['Daily_Return'], 4),
-        volatility_14d=round(tech['Volatility_14d'], 4),
-        vix_close=round(tech['VIX_Close'], 2),
-        current_price=round(tech['current_price'], 2),
-        rsi_14=round(tech['RSI_14'], 2),
-        ma20_ratio=round(tech['MA20_ratio'], 4),
-        momentum_5d=round(tech['Momentum_5d'], 4),
+        daily_return=round(float(np.nan_to_num(tech['Daily_Return'], nan=0.0)), 4),
+        volatility_14d=round(float(np.nan_to_num(tech['Volatility_14d'], nan=0.0)), 4),
+        vix_close=round(float(np.nan_to_num(tech['VIX_Close'], nan=0.0)), 2),
+        current_price=round(float(np.nan_to_num(tech['current_price'], nan=0.0)), 2),
+        rsi_14=round(float(np.nan_to_num(tech['RSI_14'], nan=0.0)), 2),
+        ma20_ratio=round(float(np.nan_to_num(tech['MA20_ratio'], nan=0.0)), 4),
+        momentum_5d=round(float(np.nan_to_num(tech['Momentum_5d'], nan=0.0)), 4),
+        tweet_volume=round(float(np.nan_to_num(tw_feats.get('Tweet_Volume', 0.0), nan=0.0)), 2),
+        tweet_sentiment_avg=round(float(np.nan_to_num(tw_feats.get('Tweet_Sentiment_Avg', 0.0), nan=0.0)), 4),
+        tweet_toxic_ratio=round(float(np.nan_to_num(tw_feats.get('Tweet_Toxic_Ratio', 0.0), nan=0.0)), 4),
+        tweet_positive_ratio=round(float(np.nan_to_num(tw_feats.get('Tweet_Positive_Ratio', 0.0), nan=0.0)), 4),
+        tweet_negative_ratio=round(float(np.nan_to_num(tw_feats.get('Tweet_Negative_Ratio', 0.0), nan=0.0)), 4),
         is_supported=is_supported,
         model_name=MODEL_NAME,
         message=message

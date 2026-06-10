@@ -37,7 +37,7 @@ load_dotenv()
 # ─────────────────────────────────────────────
 
 MONGO_URI       = os.getenv("MONGO_URI", "mongodb://localhost:27017/finans")
-INPUT_CSV       = "MultiStock_Training_v2.csv"
+INPUT_CSV       = "MultiStock_Training_v2c.csv"
 OUTPUT_FEATURES = "Tweet_Features.csv"
 OUTPUT_MERGED   = "MultiStock_Training_v3.csv"
 
