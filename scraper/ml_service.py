@@ -336,18 +336,20 @@ def load_tweet_features():
     global _tweet_cache
     if os.path.exists(TWEET_CSV):
         df = pd.read_csv(TWEET_CSV)
-        # Her hisse için en güncel (son) veriyi al
+        # Her hisse için en güncel (son) GÜNÜN değerlerini al.
+        # Eğitimde her satır o günün tweet feature'larını taşıyor (Target = ertesi gün),
+        # bu yüzden burada da son 30 günün ortalaması değil, son günün değeri kullanılmalı.
         for symbol in df['symbol'].unique():
             sym_df = df[df['symbol'] == symbol].sort_values('Date')
-            last_30 = sym_df.tail(30)
+            last = sym_df.iloc[-1]
             _tweet_cache[symbol] = {
-                'Tweet_Volume':         float(last_30['Tweet_Volume'].mean()),
-                'Tweet_Volume_7d_Avg':  float(last_30['Tweet_Volume_7d_Avg'].mean()),
-                'Tweet_Sentiment_Avg':  float(last_30['Tweet_Sentiment_Avg'].mean()),
-                'Tweet_Sentiment_3d':   float(last_30['Tweet_Sentiment_3d'].mean()),
-                'Tweet_Toxic_Ratio':    float(last_30['Tweet_Toxic_Ratio'].mean()),
-                'Tweet_Positive_Ratio': float(last_30['Tweet_Positive_Ratio'].mean()),
-                'Tweet_Negative_Ratio': float(last_30['Tweet_Negative_Ratio'].mean()),
+                'Tweet_Volume':         float(last['Tweet_Volume']),
+                'Tweet_Volume_7d_Avg':  float(last['Tweet_Volume_7d_Avg']),
+                'Tweet_Sentiment_Avg':  float(last['Tweet_Sentiment_Avg']),
+                'Tweet_Sentiment_3d':   float(last['Tweet_Sentiment_3d']),
+                'Tweet_Toxic_Ratio':    float(last['Tweet_Toxic_Ratio']),
+                'Tweet_Positive_Ratio': float(last['Tweet_Positive_Ratio']),
+                'Tweet_Negative_Ratio': float(last['Tweet_Negative_Ratio']),
             }
         print(f"{len(_tweet_cache)} hisse icin guncel Tweet verileri bellege alindi.")
     else:
