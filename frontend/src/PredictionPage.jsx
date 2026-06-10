@@ -284,7 +284,7 @@ function PredictionPage({ searchTerm }) {
             ['Eğitim Seti',     '10 hisse · 750 gün'],
             ['Test Accuracy',   '%68.00'],
             ['CV Accuracy',     '%66.00'],
-            ['Özellik Sayısı',  '17 indikatör'],
+            ['Özellik Sayısı',  '18 indikatör'],
             ['Model Versiyonu', 'v3.0'],
           ].map(([label, value]) => (
             <div key={label} className="model-info-item">
