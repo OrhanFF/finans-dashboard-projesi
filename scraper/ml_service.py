@@ -38,6 +38,8 @@ MODEL_PATH   = "model_v3.pkl"         # v3: 9460 satir + Teknik + Finnhub + Twit
 FINNHUB_KEY  = os.getenv("FINNHUB_API_KEY", "")
 FINNHUB_BASE = "https://finnhub.io/api/v1"
 
+DECAY_WEIGHTS = {0: 1.0, 1: 0.7, 2: 0.4, 3: 0.1}  # finnhub_data_builder.py ile birebir aynı
+
 SUPPORTED_SYMBOLS = {
     'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN',
     'JPM',  'JNJ',  'WMT',  'XOM',  'GOOGL'
@@ -217,14 +219,25 @@ def get_sentiment_features(symbol: str) -> dict:
     print(f"   [FinBERT] {symbol} sentiment computing...")
     score = _compute_sentiment(symbol)
 
-    # Geçmiş skorları tut (3 günlük ortalama için)
+    # Geçmiş skorları tut (3 günlük ortalama ve decay için)
     history = _sentiment_cache.get(f"{symbol}_history", [])
     history.append({'date': today_str, 'score': score})
     history = history[-7:]  # Son 7 günü sakla
 
-    # 3 günlük ortalama
-    recent_scores = [h['score'] for h in history[-3:]]
-    sentiment_3d_avg = float(np.mean(recent_scores)) if recent_scores else 0.0
+    # Sentiment_Decay: bugün ve son 3 günün haber skorları, eğitimdekiyle
+    # aynı ağırlıklarla geriye doğru sönümlenir, mutlak değeri en büyük olan kazanır
+    decay = 0.0
+    for offset, w in DECAY_WEIGHTS.items():
+        idx = len(history) - 1 - offset
+        if idx >= 0:
+            cand = history[idx]['score'] * w
+            if abs(cand) > abs(decay):
+                decay = cand
+
+    # 3 günlük ortalama (eğitimde Sentiment_Decay üzerinden hesaplanıyor)
+    history[-1]['decay'] = decay
+    recent_decays = [h.get('decay', h['score']) for h in history[-3:]]
+    sentiment_3d_avg = float(np.mean(recent_decays)) if recent_decays else 0.0
 
     # Son 7 günde haber olan gün sayısı
     news_count_7d = float(sum(1 for h in history if h['score'] != 0.0))
@@ -232,7 +245,7 @@ def get_sentiment_features(symbol: str) -> dict:
     result = {
         'date':              today_str,
         'score':             score,
-        'Sentiment_Decay':   score,           # Bugün haber varsa direkt skor
+        'Sentiment_Decay':   decay,
         'Sentiment_3d_avg':  sentiment_3d_avg,
         'News_count_7d':     news_count_7d,
     }
