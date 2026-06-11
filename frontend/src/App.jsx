@@ -82,22 +82,31 @@ function App() {
     <div className='app-container'>
       <header className='app-header'>
         <h1 className='app-title'>Gündem Borsa AI</h1>
-        <form className='search-form' onSubmit={handleSearch}>
+        <form className='search-form-pill' onSubmit={handleSearch}>
+          <div className="search-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
           <input
-            className='search-input'
+            className='search-input-pill'
             type="text"
             placeholder="Hisse sembolü ara (örn: AAPL)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             disabled={loading}
+            autoComplete="off"
           />
-          <button
-            className='search-button'
-            type="submit"
-            disabled={loading || searchTerm.trim() === ""}
-          >
-            {loading ? 'Aranıyor...' : 'Ara'}
-          </button>
+          {searchTerm.trim() !== "" && (
+            <button
+              className={`search-submit-pill ${loading ? 'loading' : ''}`}
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? '...' : '→'}
+            </button>
+          )}
         </form>
       </header>
 

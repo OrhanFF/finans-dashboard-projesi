@@ -209,23 +209,7 @@ function PredictionPage({ searchTerm }) {
 
       <div className="prediction-metric-grid">
 
-        {/* Sentiment */}
-        <article className="prediction-metric-card">
-          <p className="metric-label-sm">Haber Sentiment</p>
-          <p className="metric-value-lg" style={{ color: sentInfo.color }}>{sentInfo.text}</p>
-          <div className="sentiment-bar-bg">
-            <div className="sentiment-bar-center" />
-            <div
-              className="sentiment-bar-fill"
-              style={{
-                width: `${sentBarWidth}%`,
-                left: sentIsPos ? '50%' : `${50 - sentBarWidth}%`,
-                background: sentInfo.color,
-              }}
-            />
-          </div>
-          <p className="metric-hint" style={{ marginTop: '6px' }}>Skor: {data.sentiment_score.toFixed(3)}</p>
-        </article>
+
 
         {/* VIX */}
         <article className="prediction-metric-card">
@@ -245,35 +229,7 @@ function PredictionPage({ searchTerm }) {
 
       </div>
 
-      {/* ── X (TWITTER) ANALİZİ BAŞLIĞI ── */}
-      <p className="prediction-section-title">X (Twitter) Analizi</p>
 
-      <div className="prediction-metric-grid">
-        {/* Tweet Hacmi */}
-        <article className="prediction-metric-card">
-          <p className="metric-label-sm">Tweet Hacmi</p>
-          <p className="metric-value-lg" style={{ color: '#8b5cf6' }}>{data.tweet_volume ? data.tweet_volume.toFixed(0) : '0'}</p>
-          <p className="metric-hint" style={{ marginTop: '6px' }}>Son 24 saatteki X etkileşimi</p>
-        </article>
-
-        {/* Tweet Sentiment */}
-        <article className="prediction-metric-card">
-          <p className="metric-label-sm">Tweet Sentiment</p>
-          <p className="metric-value-lg" style={{ color: (data.tweet_sentiment_avg || 0) > 0 ? '#10b981' : (data.tweet_sentiment_avg || 0) < 0 ? '#ef4444' : '#8b949e' }}>
-            {(data.tweet_sentiment_avg || 0) > 0 ? 'Pozitif' : (data.tweet_sentiment_avg || 0) < 0 ? 'Negatif' : 'Nötr'}
-          </p>
-          <p className="metric-hint" style={{ marginTop: '6px' }}>Skor: {(data.tweet_sentiment_avg || 0).toFixed(3)}</p>
-        </article>
-
-        {/* Toksik Oranı */}
-        <article className="prediction-metric-card">
-          <p className="metric-label-sm">Toksik Tweet Oranı</p>
-          <p className="metric-value-lg" style={{ color: (data.tweet_toxic_ratio || 0) > 0.1 ? '#ef4444' : '#10b981' }}>
-            %{((data.tweet_toxic_ratio || 0) * 100).toFixed(1)}
-          </p>
-          <p className="metric-hint" style={{ marginTop: '6px' }}>Manipülasyon ve FUD riski</p>
-        </article>
-      </div>
 
       {/* ── MODEL BİLGİSİ ── */}
       <article className="model-info-card">

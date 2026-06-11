@@ -1,6 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
   font-weight: 400;
 
   font-synthesis: none;
@@ -11,6 +13,26 @@
 
 body {
   margin: 0;
-  /* Diğer tüm varsayılan stiller (display: flex, background-color vb.)
-     App.css tarafından yönetileceği için buradan kaldırıldı. */
+  background-color: #0d1117; /* Deep charcoal background */
+  color: #c9d1d9;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d1117; 
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d; 
+  border-radius: 5px;
+  border: 2px solid #0d1117; /* Adds padding inside the track */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8b949e; 
 }
